@@ -140,19 +140,25 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
     async def async_lock(self, **kwargs) -> None:
         """Lock the lock."""
         self._target_state = True
-        await self._device.set_dp(
+        datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
-            True,  # Set automatic_lock to True to lock
+            TuyaBLEDataPointType.DT_BOOL,
+            True,
         )
+        if datapoint:
+            await datapoint.set_value(True)
         self.async_write_ha_state()
     
     async def async_unlock(self, **kwargs) -> None:
         """Unlock the lock."""
         self._target_state = False
-        await self._device.set_dp(
+        datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
-            False,  # Set automatic_lock to False to unlock
+            TuyaBLEDataPointType.DT_BOOL,
+            False,
         )
+        if datapoint:
+            await datapoint.set_value(False)
         self.async_write_ha_state()
     
     @callback
