@@ -170,9 +170,21 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        # Check both lock_motor_state and automatic_lock datapoints for changes
+        state_datapoint = self._device.datapoints.get(self._mapping.state_dp_id)
+        lock_datapoint = self._device.datapoints.get(self._mapping.lock_dp_id)
+        
+        # If automatic_lock (lock_dp_id) changed externally, clear target state
+        # This handles cases where lock is controlled from outside HA
+        if lock_datapoint and lock_datapoint.value is not None and self._target_state is not None:
+            # Check if external change conflicts with our target
+            current_lock_command = bool(lock_datapoint.value)
+            if current_lock_command != self._target_state:
+                _LOGGER.debug("Lock %s: External change detected, clearing target state", self.entity_id)
+                self._target_state = None
+        
         # Update lock state based on lock_motor_state datapoint
-        datapoint = self._device.datapoints.get(self._mapping.state_dp_id)
-        if datapoint and datapoint.value is not None:
+        if state_datapoint and state_datapoint.value is not None:
             # Check if we've reached the target state during an operation
             if self._target_state is not None:
                 current_state = self.is_locked
