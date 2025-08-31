@@ -95,7 +95,7 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         super().__init__(hass, coordinator, device, product, description)
         self._mapping = mapping
         self._target_state: bool | None = None  # Track what state we're trying to achieve
-        self._operation_timeout_handle: asyncio.TimerHandle | None = None
+        self._refresh_handle: asyncio.TimerHandle | None = None
         
         if mapping.description:
             self._attr_has_entity_name = True
@@ -139,32 +139,37 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         # We're unlocking if target is unlocked (False) but current is locked (True)
         return self._target_state is False and current_state is True
     
-    def _clear_operation_timeout(self) -> None:
-        """Clear the operation timeout if it exists."""
-        if self._operation_timeout_handle:
-            self._operation_timeout_handle.cancel()
-            self._operation_timeout_handle = None
+    def _clear_refresh_timer(self) -> None:
+        """Clear the refresh timer if it exists."""
+        if self._refresh_handle:
+            self._refresh_handle.cancel()
+            self._refresh_handle = None
     
-    def _set_operation_timeout(self) -> None:
-        """Set a timeout to reset target state if operation doesn't complete."""
-        self._clear_operation_timeout()
+    def _schedule_refresh(self) -> None:
+        """Schedule next refresh of lock_motor_state."""
+        self._clear_refresh_timer()
         loop = asyncio.get_event_loop()
-        self._operation_timeout_handle = loop.call_later(
-            30.0,  # 30 second timeout
-            self._on_operation_timeout
+        self._refresh_handle = loop.call_later(
+            2.0,  # Refresh every 2 seconds
+            self._refresh_lock_state
         )
     
-    def _on_operation_timeout(self) -> None:
-        """Called when operation timeout expires."""
-        _LOGGER.warning("Lock operation timeout for %s", self.entity_id)
-        self._target_state = None
-        self.async_write_ha_state()
+    def _refresh_lock_state(self) -> None:
+        """Refresh the lock motor state."""
+        if self._target_state is None:
+            return  # No operation in progress
+            
+        # Request update from coordinator to get fresh data
+        asyncio.create_task(self._coordinator.async_request_refresh())
+        
+        # Schedule next refresh if still waiting for target state
+        if self._target_state is not None:
+            self._schedule_refresh()
 
     async def async_lock(self, **kwargs) -> None:
         """Lock the lock."""
-        self._clear_operation_timeout()
+        self._clear_refresh_timer()
         self._target_state = True
-        self._set_operation_timeout()
         
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
@@ -173,13 +178,15 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         )
         if datapoint:
             await datapoint.set_value(True)
+        
+        # Start monitoring lock_motor_state
+        self._schedule_refresh()
         self.async_write_ha_state()
     
     async def async_unlock(self, **kwargs) -> None:
         """Unlock the lock."""
-        self._clear_operation_timeout()
+        self._clear_refresh_timer()
         self._target_state = False
-        self._set_operation_timeout()
         
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
@@ -188,6 +195,9 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         )
         if datapoint:
             await datapoint.set_value(False)
+        
+        # Start monitoring lock_motor_state
+        self._schedule_refresh()
         self.async_write_ha_state()
     
     @callback
@@ -197,9 +207,10 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         current_state = self.is_locked
         if current_state is not None and self._target_state is not None:
             if current_state == self._target_state:
-                # We've reached the target state
-                self._clear_operation_timeout()
+                # We've reached the target state - stop monitoring
+                self._clear_refresh_timer()
                 self._target_state = None
+                _LOGGER.debug("Lock %s reached target state: %s", self.entity_id, current_state)
         self.async_write_ha_state()
     
     @property
