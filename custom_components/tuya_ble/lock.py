@@ -97,9 +97,9 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         
         if mapping.description:
             self._attr_has_entity_name = True
-            self._attr_unique_id = f"{device.device_info.address}_{mapping.description.key}"
+            self._attr_unique_id = f"{device.device_id}_{mapping.description.key}"
         else:
-            self._attr_unique_id = f"{device.device_info.address}_lock"
+            self._attr_unique_id = f"{device.device_id}_lock"
     
     @property
     def is_locked(self) -> bool | None:
