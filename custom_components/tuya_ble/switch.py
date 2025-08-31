@@ -173,6 +173,35 @@ mapping: dict[str, TuyaBLECategorySwitchMapping] = {
                     ),
                 ]
             ),
+            **dict.fromkeys(
+                ["0qxp5u7s"], # Smart Lock
+                [
+                    TuyaBLESwitchMapping(
+                        dp_id=32,
+                        description=SwitchEntityDescription(
+                            key="reverse_lock",
+                        ),
+                    ),
+                    TuyaBLESwitchMapping(
+                        dp_id=33,
+                        description=SwitchEntityDescription(
+                            key="automatic_lock",
+                        ),
+                    ),
+                    TuyaBLESwitchMapping(
+                        dp_id=46,
+                        description=SwitchEntityDescription(
+                            key="manual_lock",
+                        ),
+                    ),
+                    TuyaBLESwitchMapping(
+                        dp_id=47,
+                        description=SwitchEntityDescription(
+                            key="lock_motor_state",
+                        ),
+                    ),
+                ]
+            ),
         }
     ),
     "szjqr": TuyaBLECategorySwitchMapping(
