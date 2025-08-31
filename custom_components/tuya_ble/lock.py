@@ -18,7 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .tuya_ble import TuyaBLEDataPointType, TuyaBLEDevice
 
 from .const import DOMAIN
-from .devices import TuyaBLECoordinator, TuyaBLEData, TuyaBLEEntity
+from .devices import TuyaBLECoordinator, TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo
 
 import logging
 
@@ -83,20 +83,22 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         hass: HomeAssistant,
         coordinator: TuyaBLECoordinator,
         device: TuyaBLEDevice,
+        product: TuyaBLEProductInfo,
         mapping: TuyaBLELockMapping,
     ) -> None:
         """Initialize the lock."""
-        super().__init__(hass, coordinator, device, None)
+        description = mapping.description or LockEntityDescription(
+            key="lock",
+            name="Lock",
+        )
+        super().__init__(hass, coordinator, device, product, description)
         self._mapping = mapping
         self._target_state: bool | None = None  # Track what state we're trying to achieve
         
         if mapping.description:
-            self.entity_description = mapping.description
             self._attr_has_entity_name = True
-            self._attr_name = mapping.description.name
             self._attr_unique_id = f"{device.device_info.address}_{mapping.description.key}"
         else:
-            self._attr_name = "Lock"
             self._attr_unique_id = f"{device.device_info.address}_lock"
     
     @property
@@ -186,6 +188,7 @@ async def async_setup_entry(
                 hass,
                 data.coordinator,
                 data.device,
+                data.product,
                 mapping,
             )
         )
