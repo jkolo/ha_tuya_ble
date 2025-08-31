@@ -169,7 +169,7 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        return self._device.is_connected
+        return super().available
 
 
 async def async_setup_entry(
