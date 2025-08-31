@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable
+import asyncio
 
 from homeassistant.components.lock import (
     LockEntity,
@@ -94,6 +95,7 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         super().__init__(hass, coordinator, device, product, description)
         self._mapping = mapping
         self._target_state: bool | None = None  # Track what state we're trying to achieve
+        self._operation_timeout_handle: asyncio.TimerHandle | None = None
         
         if mapping.description:
             self._attr_has_entity_name = True
@@ -137,9 +139,33 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         # We're unlocking if target is unlocked (False) but current is locked (True)
         return self._target_state is False and current_state is True
     
+    def _clear_operation_timeout(self) -> None:
+        """Clear the operation timeout if it exists."""
+        if self._operation_timeout_handle:
+            self._operation_timeout_handle.cancel()
+            self._operation_timeout_handle = None
+    
+    def _set_operation_timeout(self) -> None:
+        """Set a timeout to reset target state if operation doesn't complete."""
+        self._clear_operation_timeout()
+        loop = asyncio.get_event_loop()
+        self._operation_timeout_handle = loop.call_later(
+            30.0,  # 30 second timeout
+            self._on_operation_timeout
+        )
+    
+    def _on_operation_timeout(self) -> None:
+        """Called when operation timeout expires."""
+        _LOGGER.warning("Lock operation timeout for %s", self.entity_id)
+        self._target_state = None
+        self.async_write_ha_state()
+
     async def async_lock(self, **kwargs) -> None:
         """Lock the lock."""
+        self._clear_operation_timeout()
         self._target_state = True
+        self._set_operation_timeout()
+        
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
             TuyaBLEDataPointType.DT_BOOL,
@@ -151,7 +177,10 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
     
     async def async_unlock(self, **kwargs) -> None:
         """Unlock the lock."""
+        self._clear_operation_timeout()
         self._target_state = False
+        self._set_operation_timeout()
+        
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
             TuyaBLEDataPointType.DT_BOOL,
@@ -169,6 +198,7 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         if current_state is not None and self._target_state is not None:
             if current_state == self._target_state:
                 # We've reached the target state
+                self._clear_operation_timeout()
                 self._target_state = None
         self.async_write_ha_state()
     
