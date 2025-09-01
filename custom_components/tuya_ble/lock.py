@@ -171,8 +171,8 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         # Check both lock_motor_state and automatic_lock datapoints for changes
-        state_datapoint = self._device.datapoints.get(self._mapping.state_dp_id)
-        lock_datapoint = self._device.datapoints.get(self._mapping.lock_dp_id)
+        state_datapoint = self._device.datapoints[self._mapping.state_dp_id]
+        lock_datapoint = self._device.datapoints[self._mapping.lock_dp_id]
         
         # If automatic_lock (lock_dp_id) changed externally, clear target state
         # This handles cases where lock is controlled from outside HA
