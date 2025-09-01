@@ -94,78 +94,50 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         )
         super().__init__(hass, coordinator, device, product, description)
         self._mapping = mapping
-        self._target_state: bool | None = None  # Track what state we're trying to achieve
-        
-        if mapping.description:
-            self._attr_has_entity_name = True
-            self._attr_unique_id = f"{device.device_id}_{mapping.description.key}"
-        else:
-            self._attr_unique_id = f"{device.device_id}_lock"
+        self._target_state: bool | None = None
+        self._current_state: bool | None = None
     
     @property
     def is_locked(self) -> bool | None:
         """Return true if the lock is locked."""
-        datapoint = self._device.datapoints.get_or_create(
-            self._mapping.state_dp_id,
-            TuyaBLEDataPointType.DT_BOOL,
-            False,
-        )
-        # Assuming True means locked, False means unlocked
-        # Adjust if the logic is reversed for your device
-        if datapoint.value is not None:
-            return not bool(datapoint.value)
-        return None
+        return self._target_state is True and self._current_state is not False 
     
     @property
     def is_locking(self) -> bool:
         """Return true if the lock is locking."""
-        if self._target_state is None:
-            return False
-        current_state = self.is_locked
-        if current_state is None:
-            return False
-        # We're locking if target is locked (True) but current is unlocked (False)
-        return self._target_state is True and current_state is False
+        return self._target_state is True and self._current_state is False
     
     @property
     def is_unlocking(self) -> bool:
         """Return true if the lock is unlocking."""
-        if self._target_state is None:
-            return False
-        current_state = self.is_locked
-        if current_state is None:
-            return False
-        # We're unlocking if target is unlocked (False) but current is locked (True)
-        return self._target_state is False and current_state is True
+        return self._target_state is False and self._current_state is True
     
 
     async def async_lock(self, **kwargs) -> None:
         """Lock the lock."""
-        self._target_state = True
-        
+
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
             TuyaBLEDataPointType.DT_BOOL,
             True,
         )
-        if datapoint:
-            await datapoint.set_value(True)
         
-        self.async_write_ha_state()
-    
+        if datapoint:
+            self._hass.create_task(datapoint.set_value(True))
+
+
     async def async_unlock(self, **kwargs) -> None:
         """Unlock the lock."""
-        self._target_state = False
         
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
             TuyaBLEDataPointType.DT_BOOL,
             False,
         )
+
         if datapoint:
-            await datapoint.set_value(False)
+            self._hass.create_task(datapoint.set_value(False))
         
-        self.async_write_ha_state()
     
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -173,32 +145,18 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         # Check both lock_motor_state and automatic_lock datapoints for changes
         state_datapoint = self._device.datapoints[self._mapping.state_dp_id]
         lock_datapoint = self._device.datapoints[self._mapping.lock_dp_id]
+
+        if lock_datapoint and lock_datapoint.value is not None:
+            self._target_state = bool(lock_datapoint.value)
+        else:
+            self._target_state = None
         
-        # If automatic_lock (lock_dp_id) changed externally, clear target state
-        # This handles cases where lock is controlled from outside HA
-        if lock_datapoint and lock_datapoint.value is not None and self._target_state is not None:
-            # Check if external change conflicts with our target
-            current_lock_command = bool(lock_datapoint.value)
-            if current_lock_command != self._target_state:
-                _LOGGER.debug("Lock %s: External change detected, clearing target state", self.entity_id)
-                self._target_state = None
-        
-        # Update lock state based on lock_motor_state datapoint
         if state_datapoint and state_datapoint.value is not None:
-            # Check if we've reached the target state during an operation
-            if self._target_state is not None:
-                current_state = self.is_locked
-                if current_state is not None and current_state == self._target_state:
-                    # We've reached the target state
-                    self._target_state = None
-                    _LOGGER.debug("Lock %s reached target state: %s", self.entity_id, current_state)
-        
+            self._current_state = bool(state_datapoint.value)
+        else:
+            self._current_state = None
+
         self.async_write_ha_state()
-    
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return super().available
 
 
 async def async_setup_entry(
