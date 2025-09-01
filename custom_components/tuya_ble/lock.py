@@ -121,11 +121,11 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
             TuyaBLEDataPointType.DT_BOOL,
-            True,
+            not self._mapping.reverse,
         )
         
         if datapoint:
-            self._hass.create_task(datapoint.set_value(True))
+            self._hass.create_task(datapoint.set_value(not self._mapping.reverse))
 
 
     async def async_unlock(self, **kwargs) -> None:
@@ -134,11 +134,11 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
             TuyaBLEDataPointType.DT_BOOL,
-            False,
+            self._mapping.reverse,
         )
 
         if datapoint:
-            self._hass.create_task(datapoint.set_value(False))
+            self._hass.create_task(datapoint.set_value(self._mapping.reverse))
         
     
     @callback
