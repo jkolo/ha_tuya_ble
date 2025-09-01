@@ -32,6 +32,7 @@ class TuyaBLELockMapping:
     
     lock_dp_id: int  # DP for controlling lock (automatic_lock)
     state_dp_id: int  # DP for reading lock state (lock_motor_state)
+    reverse: bool
     description: LockEntityDescription | None = None
 
 
@@ -49,6 +50,7 @@ category_mapping: dict[str, TuyaBLECategoryLockMapping] = {
                 TuyaBLELockMapping(
                     lock_dp_id=33,  # automatic_lock
                     state_dp_id=47,  # lock_motor_state (read-only)
+                    reverse=True,
                     description=LockEntityDescription(
                         key="lock",
                         name="Lock",
@@ -143,18 +145,14 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         # Check both lock_motor_state and automatic_lock datapoints for changes
-        state_datapoint = self._device.datapoints[self._mapping.state_dp_id]
         lock_datapoint = self._device.datapoints[self._mapping.lock_dp_id]
+        if lock_datapoint:
+            self._target_state = self._mapping.reverse ^ bool(lock_datapoint.value)
 
-        if lock_datapoint and lock_datapoint.value is not None:
-            self._target_state = bool(lock_datapoint.value)
-        else:
-            self._target_state = None
-        
-        if state_datapoint and state_datapoint.value is not None:
-            self._current_state = bool(state_datapoint.value)
-        else:
-            self._current_state = None
+        if self._mapping.state_dp_id > 0:
+            state_datapoint = self._device.datapoints[self._mapping.state_dp_id]
+            if state_datapoint:
+                self._current_state = self._mapping.reverse ^ bool(state_datapoint.value)
 
         self.async_write_ha_state()
 
