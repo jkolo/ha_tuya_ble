@@ -118,6 +118,9 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
     async def async_lock(self, **kwargs) -> None:
         """Lock the lock."""
 
+        self._target_state = not self._mapping.reverse
+        self.async_write_ha_state()
+
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
             TuyaBLEDataPointType.DT_BOOL,
@@ -125,14 +128,15 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         )
         
         if datapoint:
-            self._target_state = not self._mapping.reverse
-            self.async_write_ha_state()
             self._hass.create_task(datapoint.set_value(not self._mapping.reverse))
 
 
     async def async_unlock(self, **kwargs) -> None:
         """Unlock the lock."""
         
+        self._target_state = self._mapping.reverse
+        self.async_write_ha_state()
+
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
             TuyaBLEDataPointType.DT_BOOL,
@@ -140,8 +144,6 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         )
 
         if datapoint:
-            self._target_state = self._mapping.reverse
-            self.async_write_ha_state()
             self._hass.create_task(datapoint.set_value(self._mapping.reverse))
         
     
