@@ -125,6 +125,7 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         )
         
         if datapoint:
+            self._target_state = not self._mapping.reverse
             self._hass.create_task(datapoint.set_value(not self._mapping.reverse))
 
 
@@ -138,6 +139,7 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         )
 
         if datapoint:
+            self._target_state = self._mapping.reverse
             self._hass.create_task(datapoint.set_value(self._mapping.reverse))
         
     
